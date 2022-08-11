@@ -56,6 +56,74 @@ def close_modal(driver):
         pass
 
 
+def scrape_coin_data():
+    coin_data = []
+    coin_page_links = open_file(coin_page_file_name)
+    for coin_page_link in coin_page_links:
+        driver.get(coin_page_link)
+        close_modal(driver)
+        coin_data_object = {
+            "price": {},
+            "pop": {}
+        }
+        barcode = coin_page_link.split('/')[7]
+        coin_data_object['barcode'] = barcode
+
+        def get_coin_info(soup):
+            try:
+                data_list = soup.find('ul', {'class': 'ce-coin__specs-list'})
+                list_elements = data_list.find_all('li')
+                for list_element in list_elements:
+                    raw_list_string = list_element.text
+                    data = re.sub(r'\n', "", raw_list_string).split(":")
+                    key = data[0]
+                    value = data[1]
+                    coin_data_object[key] = value
+            except:
+                pass
+        try:
+            close_modal(driver)
+            html = driver.page_source
+
+            soup = BeautifulSoup(html, "html.parser")
+
+            raw_coin_description = soup.select_one(
+                'body > div.ccg-canvas > div.ccg-body > div.inner-main > div > div > div.ce-coin__topbar.ng-scope > div > div:nth-child(3) > div.ce-coin__title > h1').text
+            description = re.sub(r'\s+', " ", raw_coin_description).strip()
+
+            # GET PRODUCT DESCRIPTION
+            coin_data_object['Description'] = description
+            get_coin_info(soup)
+            grade_scroller_table = soup.find(
+                'div', {'id': 'gradeScroller'})
+            data_rows = grade_scroller_table.find_all('tr')
+            grades = []
+            grade_row = data_rows[0]
+            for grade in grade_row.find_all('th'):
+                grades.append(grade.text)
+            price_row = data_rows[1]
+            price_index = 0
+            for price in price_row.find_all('td'):
+                price_grade = grades[price_index]
+                raw_price = price.text
+                formatted_price = re.sub(r'\s+', '', raw_price)
+                coin_data_object['price'][price_grade] = formatted_price
+                price_index += 1
+            pop_index = 0
+            pop_row = data_rows[2]
+            for pop in pop_row.find_all('td'):
+                pop_grade = grades[pop_index]
+                coin_data_object['pop'][pop_grade] = pop.text
+                pop_index += 1
+            # loop through table row
+            # set the index of the header as the key
+            coin_data.append(coin_data_object)
+        except:
+            pass
+    driver.close()
+    write_new_file(coin_data, "coin_data.json")
+
+
 def get_coin_category_links():
     base_url = 'https://www.ngccoin.com/coin-explorer'
 
@@ -81,7 +149,7 @@ def get_coin_category_links():
         try:
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, close_xpath)))
-            close_icon = outer_category.find_element(
+            outer_category.find_element(
                 By.XPATH, close_xpath).click()
             driver.implicitly_wait(5)
             cat_index += 1
@@ -111,60 +179,7 @@ def get_coin_page_links():
             pass
     driver.close()
     write_new_file(coin_page_links, coin_page_file_name)
+    scrape_coin_data()
 
 
-def scrape_coin_data():
-    coin_data = []
-    coin_page_links = open_file(coin_page_file_name)
-    for coin_page_link in coin_page_links:
-        driver.get(coin_page_link)
-        coin_data_object = {}
-        barcode = coin_page_link.split('/')[7]
-        coin_data_object['barcode'] = barcode
-
-        def get_coin_info(soup):
-            try:
-                data_list = soup.find('ul', {'class': 'ce-coin__specs-list'})
-                list_elements = data_list.find_all('li')
-                for list_element in list_elements:
-                    raw_list_string = list_element.text
-                    data = re.sub(r'\n', "", raw_list_string).split(":")
-                    key = data[0]
-                    value = data[1]
-                    coin_data_object[key] = value
-            except:
-                pass
-        try:
-            close_modal(driver)
-            html = driver.page_source
-
-            soup = BeautifulSoup(html, "html.parser")
-
-            raw_coin_description = soup.select_one(
-                'body > div.ccg-canvas > div.ccg-body > div.inner-main > div > div > div.ce-coin__topbar.ng-scope > div > div:nth-child(3) > div.ce-coin__title > h1').text
-
-            # GET PRODUCT DESCRIPTION
-            coin_data_object['Description'] = raw_coin_description
-            get_coin_info(soup)
-            grade_scroller_table = soup.find('div', {"id": 'gradeSCroller'})
-            data_rows = grade_scroller_table.find_all('tr')
-            grades = []
-            grade_row = data_rows[0]
-            for grade in grade_row.find_all('td'):
-                grades.append(grade.text)
-            price_row = data_rows[1]
-            for index, price in price_row.find_all('td'):
-                coin_data_object['price'][grades[index]] = price.text
-            pop_row = data_rows[2]
-            for index, pop in pop_row.find_all('td'):
-                coin_data_object['pop'][grades[index]] = pop.text
-            # loop through table row
-            # set the index of the header as the key
-            coin_data.append(coin_data_object)
-        except:
-            pass
-    driver.close()
-    write_new_file(coin_data, "coin_data.json")
-
-
-scrape_coin_data()
+get_coin_page_links()
