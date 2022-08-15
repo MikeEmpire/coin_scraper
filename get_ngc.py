@@ -85,8 +85,11 @@ def scrape_coin_data():
             close_modal(driver)
             html = driver.page_source
 
+            price_index = 0
+            pop_index = 0
             soup = BeautifulSoup(html, "html.parser")
 
+            driver.implicitly_wait(1)
             raw_coin_description = soup.select_one(
                 'body > div.ccg-canvas > div.ccg-body > div.inner-main > div > div > div.ce-coin__topbar.ng-scope > div > div:nth-child(3) > div.ce-coin__title > h1').text
             description = re.sub(r'\s+', " ", raw_coin_description).strip()
@@ -102,14 +105,16 @@ def scrape_coin_data():
             for grade in grade_row.find_all('th'):
                 grades.append(grade.text)
             price_row = data_rows[1]
-            price_index = 0
             for price in price_row.find_all('td'):
+                anchor_tag = price.find('a')
+                if anchor_tag != None:
+                    raw_price = anchor_tag.text
+                else:
+                    raw_price = price.text
                 price_grade = grades[price_index]
-                raw_price = price.text
                 formatted_price = re.sub(r'\s+', '', raw_price)
                 coin_data_object['price'][price_grade] = formatted_price
                 price_index += 1
-            pop_index = 0
             pop_row = data_rows[2]
             for pop in pop_row.find_all('td'):
                 pop_grade = grades[pop_index]
@@ -118,6 +123,7 @@ def scrape_coin_data():
             # loop through table row
             # set the index of the header as the key
             coin_data.append(coin_data_object)
+            driver.implicitly_wait(1.2)
         except:
             pass
     driver.close()
@@ -182,4 +188,4 @@ def get_coin_page_links():
     scrape_coin_data()
 
 
-get_coin_page_links()
+scrape_coin_data()
