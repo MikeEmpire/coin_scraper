@@ -1,5 +1,6 @@
 import re
 import json
+import cloudscraper
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -10,11 +11,24 @@ from selenium.webdriver.support import expected_conditions as EC
 
 chrome_options = Options()
 chrome_options.add_argument("--enable-javascript")
+chrome_options.add_argument('--headless')
+chrome_options.add_argument('--window-size=1920x1080')
+chrome_options.add_argument("--incognito")
+chrome_options.add_argument("--nogpu")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--enable-javascript")
+chrome_options.add_experimental_option(
+    "excludeSwitches", ["enable-automation"])
+chrome_options.add_experimental_option('useAutomationExtension', False)
+chrome_options.add_argument('--disable-blink-features=AutomationControlled')
 
 category_file_name = "coin_category_links.json"
 coin_page_file_name = "coin_page_links.json"
 
 path = '/usr/local/bin/chromedriver'
+
+driver = webdriver.Chrome(service=Service(path), options=chrome_options)
 
 
 def get_element_links(element, array):
@@ -24,9 +38,6 @@ def get_element_links(element, array):
             array.append(link)
         except:
             pass
-
-
-driver = webdriver.Chrome(service=Service(path), options=chrome_options)
 
 
 def open_file(filename):
@@ -59,6 +70,8 @@ def close_modal(driver):
 def scrape_coin_data():
     coin_data = []
     coin_page_links = open_file(coin_page_file_name)
+    counter = 0
+    LIMIT = 1000
     for coin_page_link in coin_page_links:
         driver.get(coin_page_link)
         close_modal(driver)
@@ -82,14 +95,10 @@ def scrape_coin_data():
             except:
                 pass
         try:
-            close_modal(driver)
             html = driver.page_source
 
-            price_index = 0
-            pop_index = 0
             soup = BeautifulSoup(html, "html.parser")
 
-            driver.implicitly_wait(1)
             raw_coin_description = soup.select_one(
                 'body > div.ccg-canvas > div.ccg-body > div.inner-main > div > div > div.ce-coin__topbar.ng-scope > div > div:nth-child(3) > div.ce-coin__title > h1').text
             description = re.sub(r'\s+', " ", raw_coin_description).strip()
@@ -105,16 +114,14 @@ def scrape_coin_data():
             for grade in grade_row.find_all('th'):
                 grades.append(grade.text)
             price_row = data_rows[1]
+            price_index = 0
             for price in price_row.find_all('td'):
-                anchor_tag = price.find('a')
-                if anchor_tag != None:
-                    raw_price = anchor_tag.text
-                else:
-                    raw_price = price.text
                 price_grade = grades[price_index]
+                raw_price = price.text
                 formatted_price = re.sub(r'\s+', '', raw_price)
                 coin_data_object['price'][price_grade] = formatted_price
                 price_index += 1
+            pop_index = 0
             pop_row = data_rows[2]
             for pop in pop_row.find_all('td'):
                 pop_grade = grades[pop_index]
@@ -123,7 +130,10 @@ def scrape_coin_data():
             # loop through table row
             # set the index of the header as the key
             coin_data.append(coin_data_object)
-            driver.implicitly_wait(1.2)
+            counter += 1
+            if counter == LIMIT:
+                write_new_file(coin_data, "coin_data.json")
+                counter = 0
         except:
             pass
     driver.close()
@@ -168,6 +178,7 @@ def get_coin_category_links():
 
 
 def get_coin_page_links():
+    driver = webdriver.Chrome(service=Service(path), options=chrome_options)
     # load category links
     coin_page_links = []
     coin_categories = open_file(category_file_name)
